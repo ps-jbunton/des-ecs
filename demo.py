@@ -166,7 +166,7 @@ class CommandExecutionSystem(System):
             position_component=components.get(Position),
             command=components.get(ExecutingCommand).command,
         )
-        self.update_state(components.get(Commandable))
+        components.get(Commandable).state = CommandState.IDLING
         ecs.remove_components(entity, [ExecutingCommand])
 
     def update_position(self, position_component: Position, command: MoveCommand):
@@ -175,12 +175,6 @@ class CommandExecutionSystem(System):
         """
         position_component.x += command.delta_x
         position_component.y += command.delta_y
-
-    def update_state(self, command_component: Commandable):
-        """
-        Updates the command execution state.
-        """
-        command_component.state = CommandState.IDLING
 
 
 def run_quick_sim(until=100):

@@ -1,0 +1,35 @@
+{
+    // Set the editors and jupyter notebooks to format on save.
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "notebook.formatOnSave.enabled": true,
+    // Python settings
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "editor.rulers": [
+            100
+        ]
+    },
+    // Pylint settings
+    "pylint.severity": {
+        "convention": "Information",
+        "error": "Error",
+        "fatal": "Error",
+        "refactor": "Hint",
+        "warning": "Warning",
+        "W0611": "Error",
+        "undefined-variable": "Warning"
+    },
+    // isort modifications
+    "isort.args": [
+        "--profile",
+        "black",
+        "--fss",
+    ],
+    // Tell vscode we are using Pytest
+    "python.testing.pytestEnabled": true,
+}

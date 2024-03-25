@@ -1,0 +1,9 @@
+black[jupyter]
+ipykernel
+isort
+mypy
+pandas
+pint
+polars
+pylint
+simpy

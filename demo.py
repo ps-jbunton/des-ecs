@@ -84,9 +84,11 @@ class MoveCommandSystem(System):  # pylint: disable=too-few-public-methods
 
     required_components = (Commandable, Position, Destination)
 
-    def update(self, env: simpy.Environment, ecs: ComponentManager) -> None:
+    def update(
+        self, env: simpy.Environment, component_manager: ComponentManager
+    ) -> None:
         # Iterate over all commandable entities.
-        for entity, components in ecs.get_components(
+        for entity, components in component_manager.get_components(
             component_types=self.required_components
         ):
             if components.get(Commandable).state == CommandState.IDLING:
@@ -100,7 +102,7 @@ class MoveCommandSystem(System):  # pylint: disable=too-few-public-methods
                 )
                 delta_x, delta_y = (dest_x - x) / 2, (dest_y - y) / 2
                 if max(abs(delta_x), abs(delta_y)) > 1e-2:
-                    ecs.add_components(
+                    component_manager.add_components(
                         entity,
                         [
                             IncomingCommand(
@@ -118,21 +120,25 @@ class CommandExecutionSystem(System):
     required_components = (Commandable, IncomingCommand, Position)
 
     def update(
-        self, env: simpy.Environment, ecs: ComponentManager
+        self, env: simpy.Environment, component_manager: ComponentManager
     ) -> simpy.Event | None:
         """
         Transitions all commandable entities with an incoming command
         """
         shared_events = []
-        for entity, components in ecs.get_components(self.required_components):
+        for entity, components in component_manager.get_components(
+            self.required_components
+        ):
             # Copy the command rom `Incoming` to `Executing`
-            self.entity_startup(entity, components, ecs)
+            self.entity_startup(entity, components, component_manager)
             # Create a timeout event that will trigger when the command is about to finish.
             completion_event = env.timeout(delay=random.random())
 
             shared_events.append(
                 env.process(
-                    self.entity_cleanup(completion_event, entity, components, ecs)
+                    self.entity_cleanup(
+                        completion_event, entity, components, component_manager
+                    )
                 )
             )
         if shared_events:
@@ -140,15 +146,18 @@ class CommandExecutionSystem(System):
         return None
 
     def entity_startup(
-        self, entity: int, components: ComponentDict, ecs: ComponentManager
+        self,
+        entity: int,
+        components: ComponentDict,
+        component_manager: ComponentManager,
     ):
         """
         Commands for initial processing of the entity's components.
         """
-        ecs.add_components(
+        component_manager.add_components(
             entity, [ExecutingCommand(command=components.get(IncomingCommand).command)]
         )
-        ecs.remove_components(entity, [IncomingCommand])
+        component_manager.remove_components(entity, [IncomingCommand])
         components.get(Commandable).state = CommandState.EXECUTING
 
     def entity_cleanup(
@@ -156,7 +165,7 @@ class CommandExecutionSystem(System):
         triggered_event: simpy.Event,
         entity: int,
         components: ComponentDict,
-        ecs: ComponentManager,
+        component_manager: ComponentManager,
     ):
         """
         Commands for changing entity's components upon command completion.
@@ -167,7 +176,7 @@ class CommandExecutionSystem(System):
             command=components.get(ExecutingCommand).command,
         )
         components.get(Commandable).state = CommandState.IDLING
-        ecs.remove_components(entity, [ExecutingCommand])
+        component_manager.remove_components(entity, [ExecutingCommand])
 
     def update_position(self, position_component: Position, command: MoveCommand):
         """
@@ -182,18 +191,19 @@ def run_quick_sim(until=100):
     Creates instantiation of the above small example.
     """
     # Instantiation of the examples.
-    ecs = ComponentManager()
+    component_manager = ComponentManager()
 
     for _ in range(1000):
-        entity_id = ecs.new_entity(())
-        ecs.add_components(
-            entity_id, (Position(), Commandable(), Destination(x=10, y=10))
+        component_manager.new_entity(
+            components=(Position(), Commandable(), Destination(x=10, y=10))
         )
 
     move_system = MoveCommandSystem()
     exec_system = CommandExecutionSystem()
 
-    world = World.make(systems=[move_system, exec_system], ecs=ecs)
+    world = World.make(
+        systems=[move_system, exec_system], component_manager=component_manager
+    )
 
     world.run(until)
     world.recorder.to_polar_dataframe().to_pandas().to_parquet(

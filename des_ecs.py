@@ -96,19 +96,20 @@ class ComponentManager:
     # A generator for entity IDs.
     _entity_id_generator: Iterator[int] = id_generator()
 
-    def new_entity(self, components: Iterable[Component]) -> int:
+    def new_entity(self, components: Iterable[Component] | None) -> int:
         """
         Create a new entity with the given `Component`s.
         """
         entity_id = next(self._entity_id_generator)
         self.entity_to_components[entity_id] = ComponentDict()
-        for component in components:
-            c_type = type(component)
-            self.entity_to_components[entity_id].add(component)
-            if c_type not in self.type_to_entities:
-                self.type_to_entities[c_type] = {entity_id}
-            else:
-                self.type_to_entities[c_type].add(entity_id)
+        if components is not None:
+            for component in components:
+                c_type = type(component)
+                self.entity_to_components[entity_id].add(component)
+                if c_type not in self.type_to_entities:
+                    self.type_to_entities[c_type] = {entity_id}
+                else:
+                    self.type_to_entities[c_type].add(entity_id)
         return entity_id
 
     def remove_entity(self, entity_id: int) -> None:
@@ -183,7 +184,7 @@ class System(abc.ABC):  # pylint: disable=too-few-public-methods
 
     @abc.abstractmethod
     def update(
-        self, env: simpy.Environment, ecs: ComponentManager
+        self, env: simpy.Environment, component_manager: ComponentManager
     ) -> simpy.Event | None:
         """
         System update function.  It iterates through relevant portions of the ECS, performing any
@@ -273,12 +274,12 @@ class Recorder:
 @dataclasses.dataclass
 class World:
     """
-    Holds the `ECS` and the `System`s and iterates through them.
+    Holds the `ComponentManager` and the `System`s and iterates through them at each update loop.
     """
 
     env: simpy.Environment
     systems: list[System]
-    ecs: ComponentManager
+    component_manager: ComponentManager
     recorder: Recorder
 
     @classmethod
@@ -286,7 +287,7 @@ class World:
         cls,
         env: simpy.Environment | None = None,
         systems: list[System] | None = None,
-        ecs: ComponentManager | None = None,
+        component_manager: ComponentManager | None = None,
     ):
         """
         Makes a new instance.
@@ -294,7 +295,7 @@ class World:
         return cls(
             env=env or simpy.Environment(),
             systems=systems or [],
-            ecs=ecs or ComponentManager(),
+            component_manager=component_manager or ComponentManager(),
             recorder=Recorder.make(
                 db_path="./data/generated/sim_db.sqlite", db_name="sim_records"
             ),
@@ -316,11 +317,11 @@ class World:
             shared_events = []
 
             for system in self.systems:
-                event = system.update(self.env, self.ecs)
+                event = system.update(self.env, self.component_manager)
                 if event:
                     shared_events.append(event)
 
-            for entity, components in self.ecs.get_entities():
+            for entity, components in self.component_manager.get_entities():
                 for _, component in components.items():
                     self.recorder.record_component(
                         time=self.env.now, entity=entity, component=component
